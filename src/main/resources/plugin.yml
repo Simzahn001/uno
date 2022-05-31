@@ -1,0 +1,4 @@
+name: Uno
+version: '${project.version}'
+main: me.simzahn.uno.Uno
+api-version: 1.18
