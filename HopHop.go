@@ -1,7 +1,8 @@
-package hophop
+package uno
 
 import (
 	"errors"
+	"math"
 )
 
 type element interface {
@@ -56,17 +57,17 @@ type Value struct {
 	physicalQuantity rune
 }
 
-// Add adds two Values together and returns the result
+// Add adds two Value together and returns the result
 // It returns an error if the physical quantity of the two summands are not the same. The calculation will still be correct.
 func Add(a, b Value) (Value, error) {
 	v := Value{}
 
 	if a.powerOfTen > b.powerOfTen {
 		v.powerOfTen = b.powerOfTen
-		v.value = a.value*(a.value-b.value) + b.value
+		v.value = int(math.Pow10(a.powerOfTen-b.powerOfTen))*a.value + b.value
 	} else {
 		v.powerOfTen = a.powerOfTen
-		v.value = a.value + b.value*(b.value-a.value)
+		v.value = a.value + b.value*int(math.Pow10(b.powerOfTen-a.powerOfTen))
 	}
 
 	if a.physicalQuantity != b.physicalQuantity {
@@ -77,7 +78,7 @@ func Add(a, b Value) (Value, error) {
 	return v, nil
 }
 
-// Subtract subtracts two Values and returns the result.
+// Subtract subtracts two Value and returns the result.
 // It returns an error if the physical quantity of the minuend and the subtrahend isn't the same. The calculation will
 // still be correct.
 func Subtract(a, b Value) (Value, error) {
@@ -97,6 +98,77 @@ func Subtract(a, b Value) (Value, error) {
 	}
 	v.physicalQuantity = a.physicalQuantity
 	return v, nil
+}
+
+// Multiply multiplies two Value and returns the result.
+// It returns an error if there is no registered physical quantity for this multiplication. The calculation will still
+// be correct.
+func Multiply(a, b Value) (Value, error) {
+	v := Value{}
+
+	v.value = a.value * b.value
+	v.powerOfTen = a.powerOfTen + b.powerOfTen
+	var err error
+	v.physicalQuantity, err = GetProductQuantity(a.physicalQuantity, b.physicalQuantity)
+
+	return v, err
+}
+
+// Divide divides the a Value through the b Value and returns the result.
+// It returns an error if there is no registered physical quantity for this division. The calculation will still be
+// correct.
+func Divide(a, b Value) (Value, error) {
+	v := Value{}
+
+	//@TODO only good once the significant digit system is implemented.
+	v.value = a.value / b.value
+	v.powerOfTen = a.powerOfTen - b.powerOfTen
+	var err error
+	v.physicalQuantity, err = GetDivisionQuantity(a.physicalQuantity, b.physicalQuantity)
+
+	return v, err
+}
+
+var physicalQuantitiesRelations = [][]rune{
+	{'t', 'l', 'v'}, // time * length = velocity
+	{'t', 'v', 'a'}, // time * velocity = acceleration
+	{'m', 'a', 'F'}, // mass * acceleration = force
+	{'F', 'l', 'M'}, // force * length = moment
+	{'l', 'l', 'A'}, // length * length = area
+	{'A', 'l', 'V'}, // area * length = volume
+}
+
+var productQuantityLookup = map[[2]rune]rune{}
+var divisionQuantityLookup = map[[2]rune]rune{}
+
+func init() {
+	for _, rel := range physicalQuantitiesRelations {
+		a, b, result := rel[0], rel[1], rel[2]
+		productQuantityLookup[[2]rune{a, b}] = result
+		productQuantityLookup[[2]rune{b, a}] = result // auch vertauscht
+	}
+
+	for _, rel := range physicalQuantitiesRelations {
+		a, b, result := rel[0], rel[1], rel[2]
+		// result * b = a → a / b = result
+		divisionQuantityLookup[[2]rune{a, b}] = result
+		// result * a = b → b / a = result
+		divisionQuantityLookup[[2]rune{b, a}] = result
+	}
+}
+
+func GetProductQuantity(a, b rune) (rune, error) {
+	if result, ok := productQuantityLookup[[2]rune{a, b}]; ok {
+		return result, nil
+	}
+	return '#', errors.New("no matching physical quantity found")
+}
+
+func GetDivisionQuantity(numerator, denominator rune) (rune, error) {
+	if result, ok := divisionQuantityLookup[[2]rune{numerator, denominator}]; ok {
+		return result, nil
+	}
+	return '#', errors.New("no matching division relation found")
 }
 
 type Point struct {
